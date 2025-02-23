@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>QuantumPepe Staking – WalletKit</title>
+  <title>QuantumPepe Staking – WalletConnect Universal Provider</title>
+
+  <!-- Web3.js -->
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
+  <!-- WalletConnect Universal Provider & Modal UI (UMD-Bundles) -->
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/universal-provider@2.6.0/dist/umd/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/modal-ui@2.1.2/dist/umd/index.min.js"></script>
 
   <style>
     body {
@@ -79,11 +85,11 @@
 </head>
 <body>
   <div class="container">
-    <h2>QuantumPepe Staking</h2>
-    
-    <!-- Button zum Öffnen des WalletKit/WalletConnect-QR-Code -->
+    <h2>QuantumPepe Staking (WalletConnect)</h2>
+
+    <!-- Button zum Öffnen des WalletConnect-QR-Code -->
     <button id="connectWallet">Mit Wallet verbinden</button>
-    
+
     <!-- Chain-Auswahl -->
     <br/>
     <label for="chainSelector"><strong>Chain auswählen:</strong></label>
@@ -97,17 +103,17 @@
     <!-- Statusanzeige -->
     <p><strong>Wallet:</strong> <span id="walletAddress">Nicht verbunden</span></p>
     <p><strong>Chain:</strong> <span id="chainId">-</span></p>
-    
-    <!-- Beispiel: Interaktion mit dem Staking-Contract -->
+
+    <!-- Beispiel: Interaktion mit deinem Staking-Contract -->
     <p><strong>Staking Contract:</strong> <span id="stakingContract">0xABC... (Platzhalter)</span></p>
     <p><strong>Gestakte Tokens:</strong> <span id="stakedAmount">0</span></p>
-    
+
     <!-- Eingabefeld zum Staken -->
     <div class="flex-row">
       <input type="number" id="stakeInput" class="input-field" placeholder="Menge eingeben" />
       <button id="stakeButton">Stake Tokens</button>
     </div>
-    
+
     <!-- Beispiel für "Unstake" -->
     <div class="flex-row">
       <button id="unstakeButton">Unstake alles</button>
@@ -118,31 +124,19 @@
     <img src="Stak-Pepe.png" alt="QuantumPepe">
   </div>
 
-  <!-- Wichtig: type="module" für ES-Module -->
-  <script type="module">
-    /*
-      ------------------------------------------------------------
-      1) Imports von WalletKit & Co. über ein CDN (Beispiel).
-         Funktioniert nur, wenn @renown/walletkit tatsächlich
-         via jsDelivr (o.ä.) verfügbar ist. Andernfalls:
-         - Lokale Installation + Bundler (webpack/Vite)
-         - Anderes CDN
-      ------------------------------------------------------------
-    */
-    import { Core } from "https://cdn.jsdelivr.net/npm/@walletconnect/core@2.6.2/dist/esm/index.js";
-    import { WalletKit } from "https://cdn.jsdelivr.net/npm/@renown/walletkit@1.0.2/dist/esm/index.js";
-    import Web3 from "https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.module.js";
+  <script>
+    let provider, web3;
+    let account = null;
+    let chainId = null;
 
-    /*
-      ------------------------------------------------------------
-      2) Platzhalter für deinen Smart-Contract
-         - Trage hier deine Staking-Contract-Adresse und dein ABI ein
-      ------------------------------------------------------------
-    */
-    const STAKING_CONTRACT_ADDRESS = "0x1234567890abcdef1234567890ABCDEF12345678"; // <-- Ersetzen
+    // Ersetze diese IDs durch deine eigenen
+    const projectId = "67c4292e272ac36fdbc049335adf6b67";
+    const infuraId = "e501cafbd38147b5aa9e6bc20b35ec83";
+
+    // Dein Contract
+    const STAKING_CONTRACT_ADDRESS = "0x1234567890abcdef1234567890ABCDEF12345678"; // anpassen
     const STAKING_CONTRACT_ABI = [
-      // <-- Dein echtes ABI hier einfügen!
-      // Beispiel (verkürzt):
+      // Dein echtes ABI
       {
         "constant": true,
         "inputs": [{ "name": "account", "type": "address" }],
@@ -166,43 +160,163 @@
       }
     ];
 
-    /*
-      ------------------------------------------------------------
-      3) WalletKit / WalletConnect Setup
-      ------------------------------------------------------------
-    */
-    const projectId = "67c4292e272ac36fdbc049335adf6b67"; // Deine WalletConnect Project ID
-    let walletKit, provider, web3;
-    let account = null;
-    let chainId = null;
+    // RPC Map für die Chains, die du unterstützen willst
+    const rpcMap = {
+      1:   `https://mainnet.infura.io/v3/${infuraId}`,   // Ethereum
+      56:  "https://bsc-dataseed.binance.org",           // BNB
+      137: `https://polygon-mainnet.infura.io/v3/${infuraId}` // Polygon
+    };
 
-    async function initWalletKit() {
-      const core = new Core({ projectId });
-      const metadata = {
-        name: "QuantumPepe",
-        description: "Krypto , Buy , Staking , Claim",
-        url: "https://renown.com/appkit/",
-        icons: ["https://imagedelivery.net/9bKhVxiWxgiHK9ehAAt-hA/577b7c9b-794e-4629-b5c1-69a65874c0e0/sm"]
-      };
-      
-      walletKit = await WalletKit.init({ core, metadata });
-    }
+    // Beim Laden: Contract-Adresse im UI anzeigen
+    window.onload = function() {
+      document.getElementById("stakingContract").innerText = STAKING_CONTRACT_ADDRESS;
+    };
 
-    // Beim Laden der Seite: WalletKit initialisieren
-    window.addEventListener("load", async () => {
-      try {
-        await initWalletKit();
-        // Staking-Contract-Adresse im UI anzeigen
-        document.getElementById("stakingContract").innerText = STAKING_CONTRACT_ADDRESS;
-      } catch (err) {
-        console.error("WalletKit Init Fehler:", err);
-        alert("Fehler beim Initialisieren von WalletKit: " + (err.message || err));
-      }
-    });
-
-    // Funktion, um das WalletKit-Modal zu öffnen
+    // Verbindung via WalletConnect aufbauen
     async function connectWallet() {
       try {
-        const { accounts, chains } = await walletKit.connect();
-        account = accounts[0] || null;
-        chainId = chains[0]?.
+        // 1) Provider initialisieren
+        provider = await window.WalletConnectUniversalProvider.init({
+          projectId: projectId,
+          metadata: {
+            name: "QuantumPepe Staking",
+            description: "Deine dApp-Beschreibung",
+            url: "https://quantumpepe.github.io",
+            icons: ["https://avatars.githubusercontent.com/u/37784386"]
+          }
+        });
+
+        // 2) Events
+        provider.on("accountsChanged", (accounts) => {
+          account = accounts[0];
+          updateUI();
+          updateStakedBalance();
+        });
+        provider.on("chainChanged", (hexChainId) => {
+          chainId = parseInt(hexChainId, 16).toString();
+          updateUI();
+          updateStakedBalance();
+        });
+
+        // 3) Connect => Öffnet QR-Code-Modal
+        await provider.connect({
+          optionalNamespaces: {
+            eip155: {
+              methods: ["eth_sendTransaction", "eth_sign", "personal_sign", "eth_signTypedData"],
+              chains: ["eip155:1", "eip155:56", "eip155:137"],
+              events: ["chainChanged", "accountsChanged"],
+              rpcMap: rpcMap
+            }
+          }
+        });
+
+        // 4) Web3-Instanz
+        web3 = new Web3(provider);
+
+        // 5) Accounts und Chain auslesen
+        const accounts = await web3.eth.getAccounts();
+        account = accounts[0];
+        chainId = await web3.eth.getChainId(); // Numerisch
+        updateUI();
+        updateStakedBalance();
+
+      } catch (err) {
+        console.error("Fehler beim Verbinden:", err);
+        alert("Verbindungsfehler: " + err.message);
+      }
+    }
+
+    // UI aktualisieren
+    function updateUI() {
+      document.getElementById("walletAddress").innerText = account || "Nicht verbunden";
+      document.getElementById("chainId").innerText = chainId || "-";
+    }
+
+    // Chain wechseln
+    async function switchChain() {
+      if (!provider || !account) {
+        alert("Bitte zuerst verbinden!");
+        return;
+      }
+      const selected = document.getElementById("chainSelector").value;
+      let chainIdHex;
+      if (selected === "eth") {
+        chainIdHex = "0x1";   // Ethereum
+      } else if (selected === "bnb") {
+        chainIdHex = "0x38";  // BNB
+      } else if (selected === "pol") {
+        chainIdHex = "0x89";  // Polygon
+      }
+      try {
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: chainIdHex }]
+        });
+        chainId = parseInt(chainIdHex, 16);
+        updateUI();
+        updateStakedBalance();
+      } catch (err) {
+        console.error("Fehler beim Chain-Wechsel:", err);
+        alert("Manche Wallets unterstützen das nicht programmatisch.");
+      }
+    }
+
+    // Staked-Balance lesen
+    async function updateStakedBalance() {
+      if (!web3 || !account) return;
+      try {
+        const contract = new web3.eth.Contract(STAKING_CONTRACT_ABI, STAKING_CONTRACT_ADDRESS);
+        const balance = await contract.methods.stakedBalance(account).call();
+        document.getElementById("stakedAmount").innerText = balance;
+      } catch (err) {
+        console.error("Fehler beim Lesen des Staking-Balance:", err);
+      }
+    }
+
+    // Stake-Funktion
+    async function stakeTokens() {
+      if (!web3 || !account) {
+        alert("Bitte zuerst verbinden!");
+        return;
+      }
+      const amount = document.getElementById("stakeInput").value;
+      if (!amount || amount <= 0) {
+        alert("Bitte eine gültige Menge eingeben!");
+        return;
+      }
+      try {
+        const contract = new web3.eth.Contract(STAKING_CONTRACT_ABI, STAKING_CONTRACT_ADDRESS);
+        const tx = await contract.methods.stake(amount).send({ from: account });
+        alert("Stake erfolgreich! TX Hash: " + tx.transactionHash);
+        updateStakedBalance();
+      } catch (err) {
+        console.error("Fehler beim Stake:", err);
+        alert("Stake fehlgeschlagen: " + err.message);
+      }
+    }
+
+    // UnstakeAll-Funktion
+    async function unstakeAll() {
+      if (!web3 || !account) {
+        alert("Bitte zuerst verbinden!");
+        return;
+      }
+      try {
+        const contract = new web3.eth.Contract(STAKING_CONTRACT_ABI, STAKING_CONTRACT_ADDRESS);
+        const tx = await contract.methods.unstakeAll().send({ from: account });
+        alert("Unstake erfolgreich! TX Hash: " + tx.transactionHash);
+        updateStakedBalance();
+      } catch (err) {
+        console.error("Fehler beim Unstake:", err);
+        alert("Unstake fehlgeschlagen: " + err.message);
+      }
+    }
+
+    // Event-Listener
+    document.getElementById("connectWallet").addEventListener("click", connectWallet);
+    document.getElementById("switchChain").addEventListener("click", switchChain);
+    document.getElementById("stakeButton").addEventListener("click", stakeTokens);
+    document.getElementById("unstakeButton").addEventListener("click", unstakeAll);
+  </script>
+</body>
+</html>
