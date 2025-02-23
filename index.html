@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QuantumPepe Staking – WalletKit</title>
+
+  <style>
+    body {
+      background-color: #004d00;
+      color: #00ff00;
+      font-family: 'Orbitron', sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    button {
+      background-color: #00ff00;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+      border-radius: 10px;
+    }
+    button:hover {
+      background-color: #00cc00;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      border: 2px solid #00ff00;
+      border-radius: 15px;
+      box-shadow: 0px 0px 10px #00ff00;
+      background-color: rgba(0, 0, 0, 0.9);
+    }
+    .container p, .container h2, .container strong {
+      color: #00ff00;
+    }
+    select {
+      background-color: #00ff00;
+      color: #000;
+      border: none;
+      padding: 10px;
+      font-size: 16px;
+      margin-top: 10px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .pepe-container {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: auto;
+    }
+    .pepe-container img {
+      width: 100%;
+      height: auto;
+    }
+    .flex-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .input-field {
+      padding: 5px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: 1px solid #00ff00;
+      background-color: #000;
+      color: #00ff00;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>QuantumPepe Staking</h2>
+    
+    <!-- Button zum Öffnen des WalletKit/WalletConnect-QR-Code -->
+    <button id="connectWallet">Mit Wallet verbinden</button>
+    
+    <!-- Chain-Auswahl -->
+    <br/>
+    <label for="chainSelector"><strong>Chain auswählen:</strong></label>
+    <select id="chainSelector">
+      <option value="eth">Ethereum (ETH)</option>
+      <option value="bnb">Binance Smart Chain (BNB)</option>
+      <option value="pol">Polygon (POL)</option>
+    </select>
+    <button id="switchChain">Chain wechseln</button>
+
+    <!-- Statusanzeige -->
+    <p><strong>Wallet:</strong> <span id="walletAddress">Nicht verbunden</span></p>
+    <p><strong>Chain:</strong> <span id="chainId">-</span></p>
+    
+    <!-- Beispiel: Interaktion mit dem Staking-Contract -->
+    <p><strong>Staking Contract:</strong> <span id="stakingContract">0xABC... (Platzhalter)</span></p>
+    <p><strong>Gestakte Tokens:</strong> <span id="stakedAmount">0</span></p>
+    
+    <!-- Eingabefeld zum Staken -->
+    <div class="flex-row">
+      <input type="number" id="stakeInput" class="input-field" placeholder="Menge eingeben" />
+      <button id="stakeButton">Stake Tokens</button>
+    </div>
+    
+    <!-- Beispiel für "Unstake" -->
+    <div class="flex-row">
+      <button id="unstakeButton">Unstake alles</button>
+    </div>
+  </div>
+
+  <div class="pepe-container">
+    <img src="Stak-Pepe.png" alt="QuantumPepe">
+  </div>
+
+  <!-- Wichtig: type="module" für ES-Module -->
+  <script type="module">
+    /*
+      ------------------------------------------------------------
+      1) Imports von WalletKit & Co. über ein CDN (Beispiel).
+         Funktioniert nur, wenn @renown/walletkit tatsächlich
+         via jsDelivr (o.ä.) verfügbar ist. Andernfalls:
+         - Lokale Installation + Bundler (webpack/Vite)
+         - Anderes CDN
+      ------------------------------------------------------------
+    */
+    import { Core } from "https://cdn.jsdelivr.net/npm/@walletconnect/core@2.6.2/dist/esm/index.js";
+    import { WalletKit } from "https://cdn.jsdelivr.net/npm/@renown/walletkit@1.0.2/dist/esm/index.js";
+    import Web3 from "https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.module.js";
+
+    /*
+      ------------------------------------------------------------
+      2) Platzhalter für deinen Smart-Contract
+         - Trage hier deine Staking-Contract-Adresse und dein ABI ein
+      ------------------------------------------------------------
+    */
+    const STAKING_CONTRACT_ADDRESS = "0x1234567890abcdef1234567890ABCDEF12345678"; // <-- Ersetzen
+    const STAKING_CONTRACT_ABI = [
+      // <-- Dein echtes ABI hier einfügen!
+      // Beispiel (verkürzt):
+      {
+        "constant": true,
+        "inputs": [{ "name": "account", "type": "address" }],
+        "name": "stakedBalance",
+        "outputs": [{ "name": "", "type": "uint256" }],
+        "type": "function"
+      },
+      {
+        "constant": false,
+        "inputs": [{ "name": "amount", "type": "uint256" }],
+        "name": "stake",
+        "outputs": [],
+        "type": "function"
+      },
+      {
+        "constant": false,
+        "inputs": [],
+        "name": "unstakeAll",
+        "outputs": [],
+        "type": "function"
+      }
+    ];
+
+    /*
+      ------------------------------------------------------------
+      3) WalletKit / WalletConnect Setup
+      ------------------------------------------------------------
+    */
+    const projectId = "67c4292e272ac36fdbc049335adf6b67"; // Deine WalletConnect Project ID
+    let walletKit, provider, web3;
+    let account = null;
+    let chainId = null;
+
+    async function initWalletKit() {
+      const core = new Core({ projectId });
+      const metadata = {
+        name: "QuantumPepe",
+        description: "Krypto , Buy , Staking , Claim",
+        url: "https://renown.com/appkit/",
+        icons: ["https://imagedelivery.net/9bKhVxiWxgiHK9ehAAt-hA/577b7c9b-794e-4629-b5c1-69a65874c0e0/sm"]
+      };
+      
+      walletKit = await WalletKit.init({ core, metadata });
+    }
+
+    // Beim Laden der Seite: WalletKit initialisieren
+    window.addEventListener("load", async () => {
+      try {
+        await initWalletKit();
+        // Staking-Contract-Adresse im UI anzeigen
+        document.getElementById("stakingContract").innerText = STAKING_CONTRACT_ADDRESS;
+      } catch (err) {
+        console.error("WalletKit Init Fehler:", err);
+        alert("Fehler beim Initialisieren von WalletKit: " + (err.message || err));
+      }
+    });
+
+    // Funktion, um das WalletKit-Modal zu öffnen
+    async function connectWallet() {
+      try {
+        const { accounts, chains } = await walletKit.connect();
+        account = accounts[0] || null;
+        chainId = chains[0]?.
