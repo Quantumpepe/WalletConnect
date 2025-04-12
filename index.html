@@ -3,82 +3,100 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>WalletConnect Beispiel</title>
-  <!-- WalletConnect und QR-Code-Modal einbinden -->
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/client@1.6.6/dist/umd/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/qrcode-modal@1.6.6/dist/umd/index.min.js"></script>
+  <title>WalletConnect V2 Beispiel</title>
+  <!-- Einbindung des WalletConnect V2 Sign-Client über CDN -->
+  <script src="https://unpkg.com/@walletconnect/sign-client@1.8.0/dist/umd/index.min.js"></script>
 </head>
 <body>
-  <!-- Dropdown für Chain-Auswahl -->
+  <!-- Dropdown für die Netzwerkauswahl -->
   <label for="chainSelect">Wähle dein Netzwerk:</label>
   <select id="chainSelect">
-      <!-- Chain-ID: Ethereum Mainnet (1), Binance Smart Chain (56), Polygon (137) -->
-      <option value="1">ETH (Ethereum Mainnet)</option>
-      <option value="56">BNB (Binance Smart Chain)</option>
-      <option value="137">POL (Polygon Mainnet)</option>
+      <!-- Beachte: In V2 werden Chains im Format "namespace:chainId" angegeben -->
+      <option value="eip155:1">ETH (Ethereum Mainnet)</option>
+      <option value="eip155:56">BNB (Binance Smart Chain)</option>
+      <option value="eip155:137">POL (Polygon Mainnet)</option>
   </select>
 
-  <!-- Verbindungsbutton -->
+  <!-- Button zum Starten des Verbindungsvorgangs -->
   <button id="connectButton">WalletConnect verbinden</button>
 
   <script>
-    // Hole die Elemente aus dem DOM
+    // Hole die DOM-Elemente
     const connectButton = document.getElementById('connectButton');
     const chainSelect = document.getElementById('chainSelect');
 
-    // Klick-Event für den Button
-    connectButton.addEventListener('click', async () => {
-      // Instanziere WalletConnect unter Nutzung der eingebundenen Bibliotheken.
-      const WalletConnect = window.WalletConnect.default;
-      const QrcodeModal = window.WalletConnectQRCodeModal.default;
+    let signClient;  // Referenz auf den Sign Client
 
-      // Erstelle einen neuen WalletConnect-Client (Connector)
-      const connector = new WalletConnect({
-        bridge: 'https://bridge.walletconnect.org', // Standard-Bridge
-        qrcodeModal: QrcodeModal,                  // Modal zur Anzeige des QR-Codes
+    // Asynchrone Initialisierungsfunktion für WalletConnect V2
+    async function initWalletConnect() {
+      // Der Sign Client wird initialisiert.
+      // Ersetze "YOUR_PROJECT_ID" mit deiner tatsächlichen Projekt-ID.
+      signClient = await WalletConnectSignClient.init({
+        projectId: "YOUR_PROJECT_ID",      // Erforderlich für V2 – besorge dir diesen Schlüssel über WalletConnect
+        relayUrl: "wss://relay.walletconnect.com", // Standard Relay URL
+        metadata: {
+          name: "My DApp",
+          description: "DApp Beispiel mit WalletConnect V2",
+          url: "https://your-dapp-url.com",
+          icons: ["https://your-dapp-url.com/icon.png"]
+        }
       });
+      console.log("WalletConnect V2 Sign Client initialisiert");
+    }
 
-      // Prüfe, ob bereits eine Verbindung besteht
-      if (!connector.connected) {
-        // Erstelle eine neue Session, wodurch der QR-Code angezeigt wird
-        await connector.createSession();
+    // Funktion zum Verbindungsaufbau
+    async function connectWallet() {
+      // Initialisiere den Client, falls noch nicht geschehen
+      if (!signClient) {
+        await initWalletConnect();
       }
 
-      // Abonniere Events, um Verbindungsänderungen zu verwalten
-      connector.on("connect", (error, payload) => {
-        if (error) throw error;
+      // Lese die ausgewählte Chain aus dem Dropdown aus.
+      // Beispielwerte: "eip155:1", "eip155:56", "eip155:137"
+      const selectedChain = chainSelect.value;
+      console.log("Ausgewählte Chain:", selectedChain);
 
-        // Extrahiere Accounts und chainId aus der Payload
-        const { accounts, chainId } = payload.params[0];
-        console.log("Verbundene Accounts:", accounts);
-        console.log("Verbundene Chain-ID:", chainId);
-      });
+      // Definiere das erforderliche Namespace-Objekt.
+      // Hier legen wir fest, welche Methoden und Events im jeweiligen Namespace genutzt werden sollen.
+      const namespaces = {
+        eip155: {
+          methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData"],
+          chains: [selectedChain],
+          events: ["chainChanged", "accountsChanged"]
+        }
+      };
 
-      connector.on("session_update", (error, payload) => {
-        if (error) throw error;
+      try {
+        // Erzeuge eine Verbindungsanfrage. Dabei liefert die Funktion ein Objekt mit dem URI und
+        // einer "approval"-Methode, die auf die Bestätigung des Wallet-Nutzers wartet.
+        const { uri, approval } = await signClient.connect({
+          requiredNamespaces: namespaces
+        });
 
-        // Extrahiere aktualisierte Accounts und chainId
-        const { accounts, chainId } = payload.params[0];
-        console.log("Session aktualisiert – Accounts:", accounts, "Chain-ID:", chainId);
-      });
+        // Wenn ein URI erzeugt wurde, kann dieser als Grundlage für einen QR-Code genutzt werden.
+        // Hier geben wir den URI der Vereinfachung halber in der Konsole aus.
+        if (uri) {
+          console.log("WalletConnect URI:", uri);
+          // Beispiel: Hier könnte man ein externes QR-Code-Modal öffnen:
+          // QRCodeModal.open(uri, () => { console.log("QR Code geschlossen") });
+        }
 
-      connector.on("disconnect", (error, payload) => {
-        if (error) throw error;
-        console.log("Wallet disconnected");
-      });
+        // Warte auf die Benutzergenehmigung (Scannen und Akzeptieren in der Wallet-App).
+        const session = await approval();
+        console.log("Verbindung erfolgreich hergestellt. Session:", session);
 
-      // Lese die Chain-ID aus der Dropdown-Auswahl
-      const selectedChainId = parseInt(chainSelect.value);
-      console.log("Ausgewählte Chain-ID (aus Dropdown):", selectedChainId);
+        // Optional: Hier kannst du weitere Aktionen ausführen, z.B. die Accounts und die Chain-ID auslesen.
+        // session.namespaces.eip155.accounts enthält in etwa Werte wie "eip155:1:0x..."
+      } catch (error) {
+        console.error("Fehler während der Verbindung:", error);
+      }
+    }
 
-      /* 
-         Hinweis:
-         WalletConnect v1 übernimmt standardmäßig die Netzwerkauswahl über die Wallet des Users.
-         Falls dein dApp-Flow einen Wechsel des Netzwerks erfordert, musst du dies über den entsprechenden Provider (z. B. Web3/Ethers)
-         und die entsprechenden Methoden (wie EIP-3326: wallet_switchEthereumChain) anstoßen.
-         Die hier gewonnene Chain-ID aus dem Dropdown kann als Grundlage dienen, um die gewünschte Logik zu implementieren.
-      */
+    // Event-Listener für den Button, um die Verbindung zu initiieren.
+    connectButton.addEventListener('click', async () => {
+      await connectWallet();
     });
   </script>
 </body>
 </html>
+
