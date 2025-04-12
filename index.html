@@ -1,322 +1,84 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>QuantumPepe Staking1 – WalletConnect Universal Provider</title>
-
-  <!-- Web3.js -->
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
-  <!-- WalletConnect Universal Provider & Modal UI (UMD-Bundles) -->
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/universal-provider@2.6.0/dist/umd/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/modal-ui@2.1.2/dist/umd/index.min.js"></script>
-
-  <style>
-    body {
-      background-color: #004d00;
-      color: #00ff00;
-      font-family: 'Orbitron', sans-serif;
-      text-align: center;
-      padding: 20px;
-    }
-    button {
-      background-color: #00ff00;
-      color: #000;
-      border: none;
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-      margin-top: 10px;
-      border-radius: 10px;
-    }
-    button:hover {
-      background-color: #00cc00;
-    }
-    .container {
-      max-width: 600px;
-      margin: auto;
-      padding: 20px;
-      border: 2px solid #00ff00;
-      border-radius: 15px;
-      box-shadow: 0px 0px 10px #00ff00;
-      background-color: rgba(0, 0, 0, 0.9);
-    }
-    .container p, .container h2, .container strong {
-      color: #00ff00;
-    }
-    select {
-      background-color: #00ff00;
-      color: #000;
-      border: none;
-      padding: 10px;
-      font-size: 16px;
-      margin-top: 10px;
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    .pepe-container {
-      position: fixed;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 200px;
-      height: auto;
-    }
-    .pepe-container img {
-      width: 100%;
-      height: auto;
-    }
-    .flex-row {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 15px;
-    }
-    .input-field {
-      padding: 5px;
-      font-size: 14px;
-      border-radius: 5px;
-      border: 1px solid #00ff00;
-      background-color: #000;
-      color: #00ff00;
-      text-align: center;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <title>WalletConnect Beispiel</title>
+  <!-- WalletConnect und QR-Code-Modal einbinden -->
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/client@1.6.6/dist/umd/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/qrcode-modal@1.6.6/dist/umd/index.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h2>QuantumPepe Staking1 (WalletConnect)</h2>
+  <!-- Dropdown für Chain-Auswahl -->
+  <label for="chainSelect">Wähle dein Netzwerk:</label>
+  <select id="chainSelect">
+      <!-- Chain-ID: Ethereum Mainnet (1), Binance Smart Chain (56), Polygon (137) -->
+      <option value="1">ETH (Ethereum Mainnet)</option>
+      <option value="56">BNB (Binance Smart Chain)</option>
+      <option value="137">POL (Polygon Mainnet)</option>
+  </select>
 
-    <!-- Button zum Öffnen des WalletConnect-QR-Code -->
-    <button id="connectWallet">Mit Wallet verbinden</button>
-
-    <!-- Chain-Auswahl -->
-    <br/>
-    <label for="chainSelector"><strong>Chain auswählen:</strong></label>
-    <select id="chainSelector">
-      <option value="eth">Ethereum (ETH)</option>
-      <option value="bnb">Binance Smart Chain (BNB)</option>
-      <option value="pol">Polygon (POL)</option>
-    </select>
-    <button id="switchChain">Chain wechseln</button>
-
-    <!-- Statusanzeige -->
-    <p><strong>Wallet:</strong> <span id="walletAddress">Nicht verbunden</span></p>
-    <p><strong>Chain:</strong> <span id="chainId">-</span></p>
-
-    <!-- Beispiel: Interaktion mit deinem Staking-Contract -->
-    <p><strong>Staking Contract:</strong> <span id="stakingContract">0xABC... (Platzhalter)</span></p>
-    <p><strong>Gestakte Tokens:</strong> <span id="stakedAmount">0</span></p>
-
-    <!-- Eingabefeld zum Staken -->
-    <div class="flex-row">
-      <input type="number" id="stakeInput" class="input-field" placeholder="Menge eingeben" />
-      <button id="stakeButton">Stake Tokens</button>
-    </div>
-
-    <!-- Beispiel für "Unstake" -->
-    <div class="flex-row">
-      <button id="unstakeButton">Unstake alles</button>
-    </div>
-  </div>
-
-  <div class="pepe-container">
-    <img src="Stak-Pepe.png" alt="QuantumPepe">
-  </div>
+  <!-- Verbindungsbutton -->
+  <button id="connectButton">WalletConnect verbinden</button>
 
   <script>
-    let provider, web3;
-    let account = null;
-    let chainId = null;
+    // Hole die Elemente aus dem DOM
+    const connectButton = document.getElementById('connectButton');
+    const chainSelect = document.getElementById('chainSelect');
 
-    // Ersetze diese IDs durch deine eigenen
-    const projectId = "67c4292e272ac36fdbc049335adf6b67";
-    const infuraId = "e501cafbd38147b5aa9e6bc20b35ec83";
+    // Klick-Event für den Button
+    connectButton.addEventListener('click', async () => {
+      // Instanziere WalletConnect unter Nutzung der eingebundenen Bibliotheken.
+      const WalletConnect = window.WalletConnect.default;
+      const QrcodeModal = window.WalletConnectQRCodeModal.default;
 
-    // Dein Contract
-    const STAKING_CONTRACT_ADDRESS = "0x1234567890abcdef1234567890ABCDEF12345678"; // anpassen
-    const STAKING_CONTRACT_ABI = [
-      // Dein echtes ABI
-      {
-        "constant": true,
-        "inputs": [{ "name": "account", "type": "address" }],
-        "name": "stakedBalance",
-        "outputs": [{ "name": "", "type": "uint256" }],
-        "type": "function"
-      },
-      {
-        "constant": false,
-        "inputs": [{ "name": "amount", "type": "uint256" }],
-        "name": "stake",
-        "outputs": [],
-        "type": "function"
-      },
-      {
-        "constant": false,
-        "inputs": [],
-        "name": "unstakeAll",
-        "outputs": [],
-        "type": "function"
+      // Erstelle einen neuen WalletConnect-Client (Connector)
+      const connector = new WalletConnect({
+        bridge: 'https://bridge.walletconnect.org', // Standard-Bridge
+        qrcodeModal: QrcodeModal,                  // Modal zur Anzeige des QR-Codes
+      });
+
+      // Prüfe, ob bereits eine Verbindung besteht
+      if (!connector.connected) {
+        // Erstelle eine neue Session, wodurch der QR-Code angezeigt wird
+        await connector.createSession();
       }
-    ];
 
-    // RPC Map für die Chains, die du unterstützen willst
-    const rpcMap = {
-      1:   `https://mainnet.infura.io/v3/${infuraId}`,   // Ethereum
-      56:  "https://bsc-dataseed.binance.org",           // BNB
-      137: `https://polygon-mainnet.infura.io/v3/${infuraId}` // Polygon
-    };
+      // Abonniere Events, um Verbindungsänderungen zu verwalten
+      connector.on("connect", (error, payload) => {
+        if (error) throw error;
 
-    // Beim Laden: Contract-Adresse im UI anzeigen
-    window.onload = function() {
-      document.getElementById("stakingContract").innerText = STAKING_CONTRACT_ADDRESS;
-    };
+        // Extrahiere Accounts und chainId aus der Payload
+        const { accounts, chainId } = payload.params[0];
+        console.log("Verbundene Accounts:", accounts);
+        console.log("Verbundene Chain-ID:", chainId);
+      });
 
-    // Verbindung via WalletConnect aufbauen
-    async function connectWallet() {
-      try {
-        // 1) Provider initialisieren
-        provider = await window.WalletConnectUniversalProvider.init({
-          projectId: projectId,
-          metadata: {
-            name: "QuantumPepe Staking",
-            description: "Deine dApp-Beschreibung",
-            url: "https://quantumpepe.github.io",
-            icons: ["https://avatars.githubusercontent.com/u/37784386"]
-          }
-        });
+      connector.on("session_update", (error, payload) => {
+        if (error) throw error;
 
-        // 2) Events
-        provider.on("accountsChanged", (accounts) => {
-          account = accounts[0];
-          updateUI();
-          updateStakedBalance();
-        });
-        provider.on("chainChanged", (hexChainId) => {
-          chainId = parseInt(hexChainId, 16).toString();
-          updateUI();
-          updateStakedBalance();
-        });
+        // Extrahiere aktualisierte Accounts und chainId
+        const { accounts, chainId } = payload.params[0];
+        console.log("Session aktualisiert – Accounts:", accounts, "Chain-ID:", chainId);
+      });
 
-        // 3) Connect => Öffnet QR-Code-Modal
-        await provider.connect({
-          optionalNamespaces: {
-            eip155: {
-              methods: ["eth_sendTransaction", "eth_sign", "personal_sign", "eth_signTypedData"],
-              chains: ["eip155:1", "eip155:56", "eip155:137"],
-              events: ["chainChanged", "accountsChanged"],
-              rpcMap: rpcMap
-            }
-          }
-        });
+      connector.on("disconnect", (error, payload) => {
+        if (error) throw error;
+        console.log("Wallet disconnected");
+      });
 
-        // 4) Web3-Instanz
-        web3 = new Web3(provider);
+      // Lese die Chain-ID aus der Dropdown-Auswahl
+      const selectedChainId = parseInt(chainSelect.value);
+      console.log("Ausgewählte Chain-ID (aus Dropdown):", selectedChainId);
 
-        // 5) Accounts und Chain auslesen
-        const accounts = await web3.eth.getAccounts();
-        account = accounts[0];
-        chainId = await web3.eth.getChainId(); // Numerisch
-        updateUI();
-        updateStakedBalance();
-
-      } catch (err) {
-        console.error("Fehler beim Verbinden:", err);
-        alert("Verbindungsfehler: " + err.message);
-      }
-    }
-
-    // UI aktualisieren
-    function updateUI() {
-      document.getElementById("walletAddress").innerText = account || "Nicht verbunden";
-      document.getElementById("chainId").innerText = chainId || "-";
-    }
-
-    // Chain wechseln
-    async function switchChain() {
-      if (!provider || !account) {
-        alert("Bitte zuerst verbinden!");
-        return;
-      }
-      const selected = document.getElementById("chainSelector").value;
-      let chainIdHex;
-      if (selected === "eth") {
-        chainIdHex = "0x1";   // Ethereum
-      } else if (selected === "bnb") {
-        chainIdHex = "0x38";  // BNB
-      } else if (selected === "pol") {
-        chainIdHex = "0x89";  // Polygon
-      }
-      try {
-        await provider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: chainIdHex }]
-        });
-        chainId = parseInt(chainIdHex, 16);
-        updateUI();
-        updateStakedBalance();
-      } catch (err) {
-        console.error("Fehler beim Chain-Wechsel:", err);
-        alert("Manche Wallets unterstützen das nicht programmatisch.");
-      }
-    }
-
-    // Staked-Balance lesen
-    async function updateStakedBalance() {
-      if (!web3 || !account) return;
-      try {
-        const contract = new web3.eth.Contract(STAKING_CONTRACT_ABI, STAKING_CONTRACT_ADDRESS);
-        const balance = await contract.methods.stakedBalance(account).call();
-        document.getElementById("stakedAmount").innerText = balance;
-      } catch (err) {
-        console.error("Fehler beim Lesen des Staking-Balance:", err);
-      }
-    }
-
-    // Stake-Funktion
-    async function stakeTokens() {
-      if (!web3 || !account) {
-        alert("Bitte zuerst verbinden!");
-        return;
-      }
-      const amount = document.getElementById("stakeInput").value;
-      if (!amount || amount <= 0) {
-        alert("Bitte eine gültige Menge eingeben!");
-        return;
-      }
-      try {
-        const contract = new web3.eth.Contract(STAKING_CONTRACT_ABI, STAKING_CONTRACT_ADDRESS);
-        const tx = await contract.methods.stake(amount).send({ from: account });
-        alert("Stake erfolgreich! TX Hash: " + tx.transactionHash);
-        updateStakedBalance();
-      } catch (err) {
-        console.error("Fehler beim Stake:", err);
-        alert("Stake fehlgeschlagen: " + err.message);
-      }
-    }
-
-    // UnstakeAll-Funktion
-    async function unstakeAll() {
-      if (!web3 || !account) {
-        alert("Bitte zuerst verbinden!");
-        return;
-      }
-      try {
-        const contract = new web3.eth.Contract(STAKING_CONTRACT_ABI, STAKING_CONTRACT_ADDRESS);
-        const tx = await contract.methods.unstakeAll().send({ from: account });
-        alert("Unstake erfolgreich! TX Hash: " + tx.transactionHash);
-        updateStakedBalance();
-      } catch (err) {
-        console.error("Fehler beim Unstake:", err);
-        alert("Unstake fehlgeschlagen: " + err.message);
-      }
-    }
-
-    // Event-Listener
-    document.getElementById("connectWallet").addEventListener("click", connectWallet);
-    document.getElementById("switchChain").addEventListener("click", switchChain);
-    document.getElementById("stakeButton").addEventListener("click", stakeTokens);
-    document.getElementById("unstakeButton").addEventListener("click", unstakeAll);
+      /* 
+         Hinweis:
+         WalletConnect v1 übernimmt standardmäßig die Netzwerkauswahl über die Wallet des Users.
+         Falls dein dApp-Flow einen Wechsel des Netzwerks erfordert, musst du dies über den entsprechenden Provider (z. B. Web3/Ethers)
+         und die entsprechenden Methoden (wie EIP-3326: wallet_switchEthereumChain) anstoßen.
+         Die hier gewonnene Chain-ID aus dem Dropdown kann als Grundlage dienen, um die gewünschte Logik zu implementieren.
+      */
+    });
   </script>
 </body>
 </html>
