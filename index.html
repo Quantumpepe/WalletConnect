@@ -5,13 +5,13 @@
   <meta charset="UTF-8">
   <title>WalletConnect V2 Modal</title>
   <script type="module">
-    import { EthereumProvider } from "https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.10.6/dist/index.js";
+    import { EthereumProvider } from "https://unpkg.com/@walletconnect/ethereum-provider@2.10.6/dist/esm/index.js";
 
     let provider;
 
     async function connectWallet(chainId = "1") {
       provider = await EthereumProvider.init({
-        projectId: "67c4292e272ac36fdbc049335adf6b67", // <--- Deine echte projectId!
+        projectId: "67c4292e272ac36fdbc049335adf6b67", // Deine echte WalletConnect projectId
         chains: [parseInt(chainId)],
         optionalChains: [1, 56, 137],
         showQrModal: true,
@@ -20,12 +20,15 @@
       });
 
       await provider.connect();
+
       const accounts = await provider.request({ method: 'eth_accounts' });
       const chain = await provider.request({ method: 'eth_chainId' });
+
       console.log("Wallet verbunden:", accounts[0]);
       console.log("Aktuelle Chain:", chain);
     }
 
+    // 👉 Macht connectWallet global aufrufbar
     window.connectWallet = connectWallet;
   </script>
 </head>
