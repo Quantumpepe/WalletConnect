@@ -29,19 +29,28 @@
 
     // Asynchrone Initialisierungsfunktion für WalletConnect V2
     async function initWalletConnect() {
-      // Der Sign Client wird initialisiert.
-      // Ersetze "67c4292e272ac36fdbc049335adf6b67" mit deiner tatsächlichen Projekt-ID.
-      signClient = await WalletConnectSignClient.init({
-        projectId: "67c4292e272ac36fdbc049335adf6b67",      // Erforderlich für V2 – besorge dir diesen Schlüssel über WalletConnect
-        relayUrl: "wss://relay.walletconnect.com", // Standard Relay URL
-        metadata: {
-          name: "My DApp",
-          description: "DApp Beispiel mit WalletConnect V2",
-          url: "https://your-dapp-url.com",
-          icons: ["https://your-dapp-url.com/icon.png"]
-        }
-      });
-      console.log("WalletConnect V2 Sign Client initialisiert");
+      // Überprüfe, ob der globale Name vorhanden ist
+      if (!window.SignClient) {
+        console.error("SignClient ist nicht verfügbar. Bitte prüfe, ob das Skript korrekt geladen wurde.");
+        return;
+      }
+      
+      try {
+        // Initialisiere den Sign Client mit der korrekten Referenz (window.SignClient)
+        signClient = await window.SignClient.init({
+          projectId: "67c4292e272ac36fdbc049335adf6b67", // Ersetze diesen Wert durch deine tatsächliche Projekt-ID
+          relayUrl: "wss://relay.walletconnect.com",        // Standard Relay URL
+          metadata: {
+            name: "My DApp",
+            description: "DApp Beispiel mit WalletConnect V2",
+            url: "https://your-dapp-url.com",
+            icons: ["https://your-dapp-url.com/icon.png"]
+          }
+        });
+        console.log("WalletConnect V2 Sign Client initialisiert");
+      } catch (error) {
+        console.error("Fehler bei der Initialisierung des Sign Clients:", error);
+      }
     }
 
     // Funktion zum Verbindungsaufbau
@@ -51,13 +60,11 @@
         await initWalletConnect();
       }
 
-      // Lese die ausgewählte Chain aus dem Dropdown aus.
-      // Beispielwerte: "eip155:1", "eip155:56", "eip155:137"
+      // Lese die ausgewählte Chain aus dem Dropdown aus (z.B. "eip155:1")
       const selectedChain = chainSelect.value;
       console.log("Ausgewählte Chain:", selectedChain);
 
-      // Definiere das erforderliche Namespace-Objekt.
-      // Hier legen wir fest, welche Methoden und Events im jeweiligen Namespace genutzt werden sollen.
+      // Definiere das erforderliche Namespace-Objekt
       const namespaces = {
         eip155: {
           methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData"],
@@ -67,36 +74,30 @@
       };
 
       try {
-        // Erzeuge eine Verbindungsanfrage. Dabei liefert die Funktion ein Objekt mit dem URI und
-        // einer "approval"-Methode, die auf die Bestätigung des Wallet-Nutzers wartet.
+        // Erzeuge eine Verbindungsanfrage: es wird ein URI und eine approval-Funktion zurückgegeben
         const { uri, approval } = await signClient.connect({
           requiredNamespaces: namespaces
         });
 
-        // Wenn ein URI erzeugt wurde, kann dieser als Grundlage für einen QR-Code genutzt werden.
-        // Hier geben wir den URI der Vereinfachung halber in der Konsole aus.
+        // Falls ein URI erzeugt wurde, gebe diesen in der Konsole aus oder verwende ihn in einem QR-Code-Modul
         if (uri) {
           console.log("WalletConnect URI:", uri);
-          // Beispiel: Hier könnte man ein externes QR-Code-Modal öffnen:
+          // Beispiel: Falls du ein QR-Code-Modal integrieren möchtest, kannst du es hier öffnen.
           // QRCodeModal.open(uri, () => { console.log("QR Code geschlossen") });
         }
 
-        // Warte auf die Benutzergenehmigung (Scannen und Akzeptieren in der Wallet-App).
+        // Warte auf die Bestätigung des Wallet-Nutzers (über Scannen und Akzeptieren in der Wallet-App)
         const session = await approval();
         console.log("Verbindung erfolgreich hergestellt. Session:", session);
-
-        // Optional: Hier kannst du weitere Aktionen ausführen, z.B. die Accounts und die Chain-ID auslesen.
-        // session.namespaces.eip155.accounts enthält in etwa Werte wie "eip155:1:0x..."
       } catch (error) {
         console.error("Fehler während der Verbindung:", error);
       }
     }
 
-    // Event-Listener für den Button, um die Verbindung zu initiieren.
+    // Event-Listener für den Button, um die Verbindung zu initiieren
     connectButton.addEventListener('click', async () => {
       await connectWallet();
     });
   </script>
 </body>
 </html>
-
