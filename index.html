@@ -30,9 +30,9 @@
     // Asynchrone Initialisierungsfunktion für WalletConnect V2
     async function initWalletConnect() {
       // Der Sign Client wird initialisiert.
-      // Ersetze "YOUR_PROJECT_ID" mit deiner tatsächlichen Projekt-ID.
+      // Ersetze "67c4292e272ac36fdbc049335adf6b67" mit deiner tatsächlichen Projekt-ID.
       signClient = await WalletConnectSignClient.init({
-        projectId: "YOUR_PROJECT_ID",      // Erforderlich für V2 – besorge dir diesen Schlüssel über WalletConnect
+        projectId: "67c4292e272ac36fdbc049335adf6b67",      // Erforderlich für V2 – besorge dir diesen Schlüssel über WalletConnect
         relayUrl: "wss://relay.walletconnect.com", // Standard Relay URL
         metadata: {
           name: "My DApp",
